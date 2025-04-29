@@ -1,158 +1,64 @@
 import streamlit as st
 import pandas as pd
 import os
-from datetime import datetime
 
-# Ruta de archivos
+# Ruta del archivo
 RUTA_RUTAS = "rutas_guardadas.csv"
-RUTA_DATOS = "datos_generales.csv"
 
-# Valores por defecto
-valores_por_defecto = {
-    "Rendimiento Camion": 2.5,
-    "Costo Diesel": 24.0,
-    "Rendimiento Termo": 3.0,
-    "Bono ISR IMSS": 462.66,
-    "Pago x km IMPO": 2.10,
-    "Pago x km EXPO": 2.50,
-    "Pago fijo VACIO": 200.00,
-    "Tipo de cambio USD": 17.5,
-    "Tipo de cambio MXN": 1.0
-}
-
-# Funciones auxiliares
-def cargar_datos_generales():
-    if os.path.exists(RUTA_DATOS):
-        return pd.read_csv(RUTA_DATOS).set_index("Parametro").to_dict()["Valor"]
-    else:
-        return valores_por_defecto.copy()
-
-def guardar_datos_generales(valores):
-    df = pd.DataFrame(valores.items(), columns=["Parametro", "Valor"])
-    df.to_csv(RUTA_DATOS, index=False)
-
-def safe_number(x):
-    return 0 if (x is None or (isinstance(x, float) and pd.isna(x))) else x
-
-# Cargar datos generales
-valores = cargar_datos_generales()
-
-st.title("🚛 Captura de Rutas + Datos Generales")
-
-# Sección Datos Generales
-with st.expander("⚙️ Configurar Datos Generales"):
-    for key in valores_por_defecto:
-        valores[key] = st.number_input(key, value=float(valores.get(key, valores_por_defecto[key])), step=0.1)
-
-    if st.button("Guardar Datos Generales"):
-        guardar_datos_generales(valores)
-        st.success("✅ Datos Generales guardados correctamente.")
-
-st.markdown("---")
+st.title("🗂️ Gestión de Rutas Guardadas")
 
 # Cargar rutas guardadas
 if os.path.exists(RUTA_RUTAS):
-    df_rutas = pd.read_csv(RUTA_RUTAS)
-else:
-    df_rutas = pd.DataFrame()
+    df = pd.read_csv(RUTA_RUTAS)
 
-# Formulario de captura de rutas
-st.subheader("🛣️ Nueva Ruta")
-with st.form("captura_ruta"):
-    col1, col2 = st.columns(2)
+    st.subheader("📋 Rutas Registradas")
+    st.dataframe(df, use_container_width=True)
 
-    with col1:
-        fecha = st.date_input("Fecha de captura", value=datetime.today())
-        tipo = st.selectbox("Tipo de Ruta", ["IMPO", "EXPO", "VACIO"])
-        cliente = st.text_input("Nombre del Cliente")
-        origen = st.text_input("Origen")
-        destino = st.text_input("Destino")
-        km = st.number_input("Kilómetros recorridos", min_value=0.0)
-        moneda_ingreso = st.selectbox("Moneda Ingreso Flete", ["MXN", "USD"])
-        ingreso_flete = st.number_input(f"Ingreso Flete en {moneda_ingreso}", min_value=0.0)
-        moneda_cruce = st.selectbox("Moneda Ingreso Cruce", ["MXN", "USD"])
-        ingreso_cruce = st.number_input(f"Ingreso Cruce en {moneda_cruce}", min_value=0.0)
+    st.markdown(f"**Total de rutas registradas:** {len(df)}")
 
-    with col2:
-        horas_termo = st.number_input("Horas de uso del Termo", min_value=0.0)
-        lavado_termo = st.number_input("Lavado Termo", min_value=0.0)
-        movimiento_local = st.number_input("Movimiento Local", min_value=0.0)
-        puntualidad = st.number_input("Puntualidad", min_value=0.0)
-        pension = st.number_input("Pensión", min_value=0.0)
-        estancia = st.number_input("Estancia", min_value=0.0)
-        fianza_termo = st.number_input("Fianza Termo", min_value=0.0)
-        renta_termo = st.number_input("Renta Termo", min_value=0.0)
-        casetas = st.number_input("Costo de Casetas", min_value=0.0)
+    st.markdown("---")
 
-    submitted = st.form_submit_button("💾 Guardar Ruta")
+    # Eliminar rutas
+    st.subheader("🗑️ Eliminar rutas")
+    indices = st.multiselect("Selecciona los índices a eliminar", df.index.tolist())
 
-    if submitted:
-        # Calcular costos automáticos
-        diesel = float(valores.get("Costo Diesel", 24))
-        rendimiento_camion = float(valores.get("Rendimiento Camion", 2.5))
-        rendimiento_termo = float(valores.get("Rendimiento Termo", 3.0))
-        bono_isr_imss = float(valores.get("Bono ISR IMSS", 0))
-
-        tipo_cambio_usd = float(valores.get("Tipo de cambio USD", 17.5))
-        tipo_cambio_mxn = float(valores.get("Tipo de cambio MXN", 1.0))
-
-        if tipo == "IMPO":
-            sueldo = km * float(valores.get("Pago x km IMPO", 2.1))
-            bono = bono_isr_imss
-        elif tipo == "EXPO":
-            sueldo = km * float(valores.get("Pago x km EXPO", 2.5))
-            bono = bono_isr_imss
-        else:
-            sueldo = float(valores.get("Pago fijo VACIO", 200))
-            bono = 0
-
-        costo_diesel_camion = (km / rendimiento_camion) * diesel if rendimiento_camion > 0 else 0
-        costo_diesel_termo = horas_termo * rendimiento_termo * diesel if rendimiento_termo > 0 else 0
-
-        if moneda_cruce == "USD":
-            costo_cruce = ingreso_cruce * tipo_cambio_usd
-        else:
-            costo_cruce = ingreso_cruce * tipo_cambio_mxn
-
-        extras = sum([
-            safe_number(lavado_termo), safe_number(movimiento_local), safe_number(puntualidad),
-            safe_number(pension), safe_number(estancia), safe_number(fianza_termo), safe_number(renta_termo)
-        ])
-
-        costo_total = costo_diesel_camion + costo_diesel_termo + sueldo + bono + casetas + extras + costo_cruce
-
-        nueva_ruta = {
-            "Fecha": fecha,
-            "Tipo": tipo,
-            "Cliente": cliente,
-            "Origen": origen,
-            "Destino": destino,
-            "KM": km,
-            "Moneda": moneda_ingreso,
-            "Ingreso_Original": ingreso_flete,
-            "Moneda_Cruce": moneda_cruce,
-            "Cruce_Original": ingreso_cruce,
-            "Costo_Cruce": costo_cruce,
-            "Casetas": casetas,
-            "Horas_Termo": horas_termo,
-            "Lavado_Termo": lavado_termo,
-            "Movimiento_Local": movimiento_local,
-            "Puntualidad": puntualidad,
-            "Pension": pension,
-            "Estancia": estancia,
-            "Fianza_Termo": fianza_termo,
-            "Renta_Termo": renta_termo,
-            "Costo_Diesel_Camion": costo_diesel_camion,
-            "Costo_Diesel_Termo": costo_diesel_termo,
-            "Sueldo_Operador": sueldo,
-            "Bono": bono,
-            "Costo_Casetas": casetas,
-            "Costo_Extras": extras,
-            "Costo_Total_Ruta": costo_total
-        }
-
-        df_rutas = pd.concat([df_rutas, pd.DataFrame([nueva_ruta])], ignore_index=True)
-        df_rutas.to_csv(RUTA_RUTAS, index=False)
-
-        st.success("✅ Ruta guardada exitosamente.")
+    if st.button("Eliminar rutas seleccionadas") and indices:
+        df.drop(index=indices, inplace=True)
+        df.reset_index(drop=True, inplace=True)
+        df.to_csv(RUTA_RUTAS, index=False)
+        st.success("✅ Rutas eliminadas correctamente.")
         st.experimental_rerun()
+
+    st.markdown("---")
+
+    # Editar rutas
+    st.subheader("✏️ Editar Ruta Existente")
+    indice_editar = st.selectbox("Selecciona el índice a editar", df.index.tolist())
+
+    if indice_editar is not None:
+        ruta = df.loc[indice_editar]
+
+        st.markdown("### Modifica los valores principales:")
+        
+        fecha = st.date_input("Fecha", pd.to_datetime(ruta.get("Fecha", pd.Timestamp.now())))
+        tipo = st.selectbox("Tipo", ["IMPO", "EXPO", "VACIO"], index=["IMPO", "EXPO", "VACIO"].index(ruta.get("Tipo", "IMPO")))
+        cliente = st.text_input("Cliente", value=ruta.get("Cliente", ""))
+        origen = st.text_input("Origen", value=ruta.get("Origen", ""))
+        destino = st.text_input("Destino", value=ruta.get("Destino", ""))
+        km = st.number_input("Kilómetros", min_value=0.0, value=float(ruta.get("KM", 0.0)))
+        ingreso_original = st.number_input("Ingreso Flete Original", min_value=0.0, value=float(ruta.get("Ingreso_Original", 0.0)))
+
+        if st.button("Guardar cambios"):
+            df.at[indice_editar, "Fecha"] = fecha
+            df.at[indice_editar, "Tipo"] = tipo
+            df.at[indice_editar, "Cliente"] = cliente
+            df.at[indice_editar, "Origen"] = origen
+            df.at[indice_editar, "Destino"] = destino
+            df.at[indice_editar, "KM"] = km
+            df.at[indice_editar, "Ingreso_Original"] = ingreso_original
+
+            df.to_csv(RUTA_RUTAS, index=False)
+            st.success("✅ Ruta actualizada exitosamente.")
+            st.experimental_rerun()
+else:
+    st.warning("⚠️ No hay rutas guardadas todavía.")
